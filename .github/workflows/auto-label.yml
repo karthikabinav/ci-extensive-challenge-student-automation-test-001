@@ -1,0 +1,51 @@
+name: Auto Label Issues by Keyword
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Existing issue number to label
+        required: true
+        type: string
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Add labels matching issue keywords
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            let issue = context.payload.issue;
+            if (context.eventName == "workflow_dispatch") {
+              const num = Number(context.payload.inputs.issue_number);
+              if (!Number.isSafeInteger(num) || num <= 0) throw new Error("issue_number must be positive integer");
+              issue = (await github.rest.issues.get({ owner, repo, issue_number: num })).data;
+            }
+            if (!issue || issue.pull_request) return;
+            const text = [issue.title || "", issue.body || ""].join("\n").toLowerCase();
+            const labels = [];
+            if (text.includes("error")) labels.push("bug");
+            if (text.includes("add")) labels.push("feature");
+            if (labels.length == 0) return;
+            const defs = {
+              bug: { color: "d73a4a", description: "Something is not working" },
+              feature: { color: "a2eeef", description: "New functionality or enhancement" }
+            };
+            for (const name of labels) {
+              try { await github.rest.issues.getLabel({ owner, repo, name }); }
+              catch (e) {
+                if (e.status != 404) throw e;
+                try { await github.rest.issues.createLabel({ owner, repo, name, ...defs[name] }); }
+                catch (ce) { if (ce.status != 422) throw ce; }
+              }
+            }
+            await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels });
