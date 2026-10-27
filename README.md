@@ -1,2 +1,3 @@
-# ci-extensive-challenge-student-automation-test-001
+# CI Extensive Challenge
+
 A repository to test complex GitHub automation workflows.
